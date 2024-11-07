@@ -1,0 +1,51 @@
+#include <ModbusMaster.h>
+
+// สร้างออบเจ็กต์ ModbusMaster
+ModbusMaster node;
+
+// กำหนดขา RX และ TX สำหรับ RS485
+#define RX_PIN 17
+#define TX_PIN 16
+
+void setup() {
+  // เริ่มต้น Serial สำหรับการดีบัก
+  Serial.begin(115200);
+
+  // เริ่มต้นการสื่อสาร Modbus ที่บอดเรท 9600
+  Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+
+  // ตั้งค่า Modbus และระบุ ID ของอุปกรณ์
+  node.begin(1, Serial2); // 1 คือ Modbus slave ID ของ XY-MD02
+}
+
+void loop() {
+  uint8_t result;
+  uint16_t temperature, humidity;
+
+  // อ่านค่าอุณหภูมิจาก Input Register ที่อยู่ 0x0001
+  result = node.readInputRegisters(0x0001, 1);
+  if (result == node.ku8MBSuccess) {
+    temperature = node.getResponseBuffer(0x00);
+    Serial.print("Temperature: ");
+    Serial.print(temperature / 10.0);  // หารด้วย 10 เพื่อให้ได้ค่าในหน่วยจริง
+    Serial.println(" °C");
+  } else {
+    Serial.print("Failed to read temperature, error code: ");
+    Serial.println(result);
+  }
+
+  // อ่านค่าความชื้นจาก Input Register ที่อยู่ 0x0002
+  result = node.readInputRegisters(0x0002, 1);
+  if (result == node.ku8MBSuccess) {
+    humidity = node.getResponseBuffer(0x00);
+    Serial.print("Humidity: ");
+    Serial.print(humidity / 10.0);  // หารด้วย 10 เพื่อให้ได้ค่าในหน่วยจริง
+    Serial.println(" %");
+  } else {
+    Serial.print("Failed to read humidity, error code: ");
+    Serial.println(result);
+  }
+
+  // หน่วงเวลาก่อนอ่านค่าครั้งถัดไป
+  delay(1000);
+}
