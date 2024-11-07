@@ -1,0 +1,67 @@
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h> 
+
+// ข้อมูลการเชื่อมต่อ Wi-Fi
+#define WIFI_SSID "xxx"
+#define WIFI_PASSWORD "xxx"
+
+// ข้อมูล Firebase
+#define FIREBASE_HOST "xx-test-default-rtdb.asia-southeast1.firebasedatabase.app/"  // URL ของ Firebase Database
+#define FIREBASE_API_KEY "xx"        // API Key ของ Firebase Project
+
+// Firebase authentication
+#define USER_EMAIL "xxx"             // อีเมลที่ใช้สมัครสมาชิกใน Firebase Authentication
+#define USER_PASSWORD "xxx"                   // รหัสผ่านสำหรับบัญชีนี้
+
+FirebaseData firebaseData;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+void setup() {
+  Serial.begin(115200);
+
+  // เชื่อมต่อ Wi-Fi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.println("Connected to Wi-Fi");
+
+  // ตั้งค่า Firebase API Key และ Host
+  config.api_key = FIREBASE_API_KEY;
+  config.database_url = FIREBASE_HOST;
+
+  // ตั้งค่า Firebase authentication
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+
+  // เริ่มต้น Firebase
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+}
+
+void loop() {
+  // ตัวอย่างค่า temperature และ humidity
+  float temperature = 27.5;
+  float humidity = 67.5;
+
+  // ส่งค่าไปที่ Firebase
+  if (Firebase.RTDB.setFloat(&firebaseData, "/sensorData/temperature", temperature)) {
+    Serial.println("Temperature sent to Firebase successfully");
+  } else {
+    Serial.print("Failed to send temperature: ");
+    Serial.println(firebaseData.errorReason());
+  }
+
+  if (Firebase.RTDB.setFloat(&firebaseData, "/sensorData/humidity", humidity)) {
+    Serial.println("Humidity sent to Firebase successfully");
+  } else {
+    Serial.print("Failed to send humidity: ");
+    Serial.println(firebaseData.errorReason());
+  }
+
+  delay(5000);
+}
