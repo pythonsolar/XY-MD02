@@ -1,0 +1,110 @@
+#include <ModbusMaster.h>
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
+
+// ข้อมูลการเชื่อมต่อ Wi-Fi
+#define WIFI_SSID "Witthaya"
+#define WIFI_PASSWORD "witthaya"
+
+// ข้อมูล Firebase
+#define FIREBASE_HOST "xy-md02-test-default-rtdb.asia-southeast1.firebasedatabase.app/"   // URL ของ Firebase Database ของคุณ
+#define FIREBASE_API_KEY "AIzaSyBKqhjYhjFkUrPQyBuTwxDG4E3PgdvJXJo"                 // API Key ของ Firebase Project
+
+// Firebase authentication
+#define USER_EMAIL "pythonsolar101@gmail.com"                      // อีเมลที่ใช้ใน Firebase Authentication
+#define USER_PASSWORD "Python@101"                            // รหัสผ่านสำหรับบัญชีนี้
+
+ModbusMaster node;                   // สร้างออบเจ็กต์ ModbusMaster
+FirebaseData fbdo;                   // ออบเจ็กต์สำหรับการเชื่อมต่อ Firebase
+FirebaseAuth auth;                   // การยืนยันตัวตน Firebase
+FirebaseConfig config;               // การตั้งค่า Firebase
+
+// กำหนดขา RX และ TX สำหรับ RS485
+#define RX_PIN 17
+#define TX_PIN 16
+
+void setup() {
+  // เริ่มต้น Serial สำหรับการดีบัก
+  Serial.begin(115200);
+
+  // เริ่มต้นการสื่อสาร Modbus ที่บอดเรท 9600
+  Serial2.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
+
+  // ตั้งค่า Modbus และระบุ ID ของอุปกรณ์
+  node.begin(1, Serial2); // 1 คือ Modbus slave ID ของ XY-MD02
+
+  // เชื่อมต่อ Wi-Fi
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.println("Connected to Wi-Fi");
+
+  // ตั้งค่า Firebase API Key และ Host
+  config.api_key = FIREBASE_API_KEY;
+  config.database_url = FIREBASE_HOST;
+
+  // ตั้งค่า Firebase authentication
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+
+  // เริ่มต้น Firebase
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  // ตั้งค่า NTP สำหรับการดึงเวลา
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+}
+
+void loop() {
+  uint8_t result;
+  uint16_t temperature, humidity;
+
+  // อ่านค่าอุณหภูมิจาก Input Register ที่อยู่ 0x0001
+  result = node.readInputRegisters(0x0001, 1);
+  if (result == node.ku8MBSuccess) {
+    temperature = node.getResponseBuffer(0x00);
+    float tempCelsius = temperature / 10.0;  // แปลงเป็นหน่วยจริง (°C)
+    Serial.print("Temperature: ");
+    Serial.print(tempCelsius);
+    Serial.println(" °C");
+
+    // ส่งค่า temperature ไปที่ Firebase
+    if (Firebase.RTDB.setFloat(&fbdo, "/sensorData/temperature", tempCelsius)) {
+      Serial.println("Temperature sent to Firebase successfully");
+    } else {
+      Serial.print("Failed to send temperature, ");
+      Serial.println(fbdo.errorReason());
+    }
+  } else {
+    Serial.print("Failed to read temperature, error code: ");
+    Serial.println(result);
+  }
+
+  // อ่านค่าความชื้นจาก Input Register ที่อยู่ 0x0002
+  result = node.readInputRegisters(0x0002, 1);
+  if (result == node.ku8MBSuccess) {
+    humidity = node.getResponseBuffer(0x00);
+    float humPercent = humidity / 10.0;  // แปลงเป็นหน่วยจริง (%)
+    Serial.print("Humidity: ");
+    Serial.print(humPercent);
+    Serial.println(" %");
+
+    // ส่งค่า humidity ไปที่ Firebase
+    if (Firebase.RTDB.setFloat(&fbdo, "/sensorData/humidity", humPercent)) {
+      Serial.println("Humidity sent to Firebase successfully");
+    } else {
+      Serial.print("Failed to send humidity, ");
+      Serial.println(fbdo.errorReason());
+    }
+  } else {
+    Serial.print("Failed to read humidity, error code: ");
+    Serial.println(result);
+  }
+
+  // หน่วงเวลา 5 วินาทีก่อนอัปเดตข้อมูลใหม่
+  delay(5000);
+}
